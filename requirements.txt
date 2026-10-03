@@ -1,0 +1,5 @@
+requests==2.31.0
+tiktoken==0.14.0
+sentence-transformers
+numpy
+qdrant-client

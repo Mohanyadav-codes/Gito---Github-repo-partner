@@ -1,0 +1,27 @@
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Downloaded repositories and extracted data
+repo_output/
+test_repo/
+test_output/
+
+# Vector database storage
+qdrant_db/
+test_qdrant_db/
+vector_store/
+
+# Generated chunks / temporary dumps
+chunks.json
+
+# Environment variables & secrets
+.env
+*.env
+credentials.json

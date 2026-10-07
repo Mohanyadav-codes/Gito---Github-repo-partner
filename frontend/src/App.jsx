@@ -212,8 +212,8 @@ export default function App() {
         {/* Brand Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-[#1c1c22]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-              <FolderGit2 className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 p-1 flex items-center justify-center shadow-md shadow-orange-500/10">
+              <img src="/logo.png" alt="Gito Robot Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-1.5 font-bold tracking-tight text-white text-base">
@@ -366,8 +366,8 @@ export default function App() {
           {messages.length === 0 ? (
             /* ── CENTER PLACEHOLDER (ChatGPT-like minimal landing) ── */
             <div className="max-w-xl w-full my-auto flex flex-col items-center text-center animate-fade-in px-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-600 flex items-center justify-center shadow-xl shadow-orange-500/25 mb-4">
-                <Sparkles className="w-6 h-6 text-white" />
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-b from-orange-500/15 to-transparent border border-orange-500/30 p-2.5 flex items-center justify-center shadow-2xl shadow-orange-500/20 mb-4 transition-transform hover:scale-105 duration-300">
+                <img src="/logo.png" alt="Gito Robot Logo" className="w-full h-full object-contain drop-shadow" />
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
@@ -426,8 +426,8 @@ export default function App() {
                   }`}
                 >
                   {msg.role === "assistant" && (
-                    <div className="w-7 h-7 rounded-lg bg-orange-600 flex items-center justify-center shrink-0 mt-1 shadow-md shadow-orange-600/30">
-                      <Bot className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0 mt-1 shadow-md shadow-orange-500/10 p-0.5">
+                      <img src="/logo.png" alt="Gito" className="w-full h-full object-contain" />
                     </div>
                   )}
 
@@ -547,8 +547,8 @@ export default function App() {
               {/* Loading Indicator */}
               {isLoading && (
                 <div className="flex items-center gap-3 text-zinc-400 text-xs py-2">
-                  <div className="w-7 h-7 rounded-lg bg-orange-600 flex items-center justify-center shrink-0 shadow-md shadow-orange-600/30">
-                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0 p-0.5 animate-pulse">
+                    <img src="/logo.png" alt="Gito" className="w-full h-full object-contain" />
                   </div>
                   <span className="animate-pulse">Gito is searching codebase & synthesizing answer...</span>
                 </div>
@@ -624,8 +624,8 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400">
-                <FolderGit2 className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 p-1 flex items-center justify-center">
+                <img src="/logo.png" alt="Gito" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">Add GitHub Repository</h3>

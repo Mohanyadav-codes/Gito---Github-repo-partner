@@ -100,7 +100,19 @@ class GitoAgent:
                 from groq import Groq
                 self.client = Groq(api_key=groq_key)
                 self.provider = "groq"
-                self.model = self.model or os.getenv("GITO_MODEL", "qwen/qwen3.8-27b")
+
+                preferred = self.model or os.getenv("GITO_MODEL", "qwen/qwen3.8-27b")
+                try:
+                    available = [m.id for m in self.client.models.list().data if not m.id.startswith("whisper")]
+                    if preferred in available:
+                        self.model = preferred
+                    else:
+                        fallbacks = [m for m in available if "qwen" in m or "gpt-oss" in m or "llama" in m]
+                        self.model = fallbacks[0] if fallbacks else available[0]
+                        print(f"[Gito] Model '{preferred}' not available on this Groq cluster. Auto-selected '{self.model}'.")
+                except Exception:
+                    self.model = preferred
+
                 print(f"[Gito] Connected to Groq (model: {self.model})")
                 return
             except Exception as e:
@@ -205,6 +217,39 @@ class GitoAgent:
                 full_response = response.choices[0].message.content
                 print(full_response)
         except Exception as e:
+            if self.provider == "groq" and ("model_not_found" in str(e) or "404" in str(e)):
+                try:
+                    available = [m.id for m in self.client.models.list().data if not m.id.startswith("whisper")]
+                    fallback_model = next((m for m in available if "qwen" in m or "gpt" in m), available[0])
+                    print(f"\n[Gito Recovery] Auto-retrying with active model: '{fallback_model}'...")
+                    self.model = fallback_model
+                    if stream:
+                        response_stream = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            temperature=0.2,
+                            stream=True,
+                        )
+                        for chunk in response_stream:
+                            delta = chunk.choices[0].delta.content or ""
+                            sys.stdout.write(delta)
+                            sys.stdout.flush()
+                            full_response += delta
+                        sys.stdout.write("\n")
+                        return full_response
+                    else:
+                        response = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            temperature=0.2,
+                            stream=False,
+                        )
+                        return response.choices[0].message.content
+                except Exception as retry_err:
+                    err_msg = f"\n[Gito Error] Failed after auto-recovery: {retry_err}"
+                    print(err_msg)
+                    return err_msg
+
             err_msg = f"\n[Gito Error] Failed to generate response from {self.provider}: {e}"
             print(err_msg)
             return err_msg

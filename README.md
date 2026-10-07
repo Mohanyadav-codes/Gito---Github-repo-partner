@@ -9,21 +9,28 @@ Gito is an agent designed to extract repositories from links, build a hybrid RAG
 pip install -r requirements.txt
 ```
 
-## Quickstart: Unified CLI
+## Quickstart: Web Frontend (ChatGPT-Style UI)
 
-Launch Gito's interactive terminal. It prompts you to select an existing indexed project or paste a new GitHub repo link, indexes it automatically, and drops you into a direct conversational chat:
+Gito includes a modern dark-mode React frontend with an orange accent, project sidebar, and instant codebase chat:
+
+```bash
+# 1. Start the backend web server:
+python server.py
+
+# 2. Open your browser:
+# http://localhost:8000
+```
+
+> **For Development with Hot Reload:**
+> - Terminal 1: `python server.py`
+> - Terminal 2: `cd frontend && npm run dev` (Vite dev server at `http://localhost:5173`)
+
+## Quickstart: Unified CLI (Terminal Mode)
+
+Launch Gito's interactive terminal directly in PowerShell / Bash:
 
 ```bash
 python main.py
-```
-
-You can also pass arguments directly:
-```bash
-# Add/index a new repo and start chatting immediately:
-python main.py --repo https://github.com/owner/repo
-
-# Query an existing collection in one shot:
-python main.py --collection gito_codebase --query "How does the auth flow work?"
 ```
 
 ## Individual Pipeline Steps

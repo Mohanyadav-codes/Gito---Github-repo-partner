@@ -7,6 +7,10 @@ __pycache__/
 env/
 venv/
 .venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
 
 # Downloaded repositories and extracted data
 repo_output/

@@ -6,3 +6,5 @@ qdrant-client
 openai
 groq
 python-dotenv
+fastapi
+uvicorn

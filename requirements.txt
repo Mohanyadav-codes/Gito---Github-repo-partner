@@ -3,3 +3,6 @@ tiktoken==0.14.0
 sentence-transformers
 numpy
 qdrant-client
+openai
+groq
+python-dotenv

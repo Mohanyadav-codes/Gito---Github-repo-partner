@@ -51,3 +51,21 @@ python retriever.py "installation steps" --top-k 3 --type doc
 # Interactive query mode
 python retriever.py -i
 ```
+
+### 5. LLM Answering Layer (`agent.py`)
+Passes the retrieved codebase snippets to the LLM agent (`Gito`) with strict grounding instructions to answer user questions with file/function citations:
+
+```bash
+# Set your API key (Groq or OpenAI)
+# Powershell: $env:GROQ_API_KEY = "your-groq-key"
+# Or create a .env file based on .env.example
+
+# Ask a question (streams live answer)
+python agent.py "How is attendance recorded in the database?"
+
+# Interactive chat session
+python agent.py -i
+
+# Use specific model or provider
+python agent.py "Explain the API endpoints" --provider groq --model llama-3.3-70b-versatile
+```

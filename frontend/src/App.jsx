@@ -41,6 +41,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [expandedSources, setExpandedSources] = useState({});
+  const [expandedReasoning, setExpandedReasoning] = useState({});
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const messagesEndRef = useRef(null);
@@ -123,7 +124,7 @@ export default function App() {
     }
   };
 
-  // Handle Send Message
+  // Handle Send Message with Live SSE Streaming
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
@@ -137,13 +138,17 @@ export default function App() {
     setInputMessage("");
     setErrorMsg("");
 
-    // Add user message
-    const newMsgList = [...messages, { role: "user", content: userText }];
-    setMessages(newMsgList);
+    // Append user message & streaming assistant placeholder
+    const userMsg = { role: "user", content: userText };
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      { role: "assistant", content: "", citations: [], reasoning: "", isStreaming: true },
+    ]);
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -153,31 +158,121 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.detail || "Failed to get response.");
+        let errDetail = "Failed to get response.";
+        try {
+          const errData = await res.json();
+          errDetail = errData.detail || errDetail;
+        } catch (_) {}
+        throw new Error(errDetail);
       }
 
-      setMessages([
-        ...newMsgList,
-        {
-          role: "assistant",
-          content: data.answer,
-          citations: data.citations || [],
-        },
-      ]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.type === "citations") {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    citations: data.citations || [],
+                  };
+                }
+                return updated;
+              });
+            } else if (data.type === "reasoning") {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    reasoning: (updated[lastIdx].reasoning || "") + data.content,
+                  };
+                }
+                return updated;
+              });
+            } else if (data.type === "token") {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    content: (updated[lastIdx].content || "") + data.content,
+                  };
+                }
+                return updated;
+              });
+            } else if (data.type === "done") {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    isStreaming: false,
+                  };
+                }
+                return updated;
+              });
+            }
+          } catch (jsonErr) {
+            console.error("SSE parse error:", jsonErr);
+          }
+        }
+      }
     } catch (err) {
-      setMessages([
-        ...newMsgList,
-        {
-          role: "assistant",
-          content: `⚠️ Error: ${err.message}`,
-          isError: true,
-        },
-      ]);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: (updated[lastIdx].content || "") + `\n\n⚠️ Error: ${err.message}`,
+            isError: true,
+            isStreaming: false,
+          };
+        } else {
+          updated.push({
+            role: "assistant",
+            content: `⚠️ Error: ${err.message}`,
+            isError: true,
+            isStreaming: false,
+          });
+        }
+        return updated;
+      });
     } finally {
       setIsLoading(false);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            isStreaming: false,
+          };
+        }
+        return updated;
+      });
     }
   };
 
@@ -189,6 +284,13 @@ export default function App() {
 
   const toggleSources = (msgIdx) => {
     setExpandedSources((prev) => ({
+      ...prev,
+      [msgIdx]: !prev[msgIdx],
+    }));
+  };
+
+  const toggleReasoning = (msgIdx) => {
+    setExpandedReasoning((prev) => ({
       ...prev,
       [msgIdx]: !prev[msgIdx],
     }));
@@ -438,54 +540,101 @@ export default function App() {
                         : "bg-[#131317] text-zinc-200 border border-[#202028] shadow-sm"
                     }`}
                   >
+                    {/* Collapsible Reasoning Block (ChatGPT-style) */}
+                    {msg.role === "assistant" && msg.reasoning && (
+                      <div className="mb-3 rounded-xl border border-[#23232c] bg-[#0c0c10] overflow-hidden text-xs">
+                        <button
+                          type="button"
+                          onClick={() => toggleReasoning(idx)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors text-left cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+                            <span className="font-medium text-zinc-300 text-[11px]">
+                              {!msg.content ? "Thinking..." : "Reasoning process"}
+                            </span>
+                          </div>
+                          <ChevronRight
+                            className={`w-3.5 h-3.5 transition-transform text-zinc-500 ${
+                              (expandedReasoning[idx] !== undefined
+                                ? expandedReasoning[idx]
+                                : !msg.content)
+                                ? "rotate-90"
+                                : ""
+                            }`}
+                          />
+                        </button>
+                        {(expandedReasoning[idx] !== undefined
+                          ? expandedReasoning[idx]
+                          : !msg.content) && (
+                          <div className="px-3 pb-3 pt-1 text-[11px] text-zinc-400 font-mono whitespace-pre-wrap border-t border-[#1e1e26] max-h-48 overflow-y-auto leading-normal">
+                            {msg.reasoning}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Searching & Thinking status when waiting for first token or reasoning */}
+                    {msg.role === "assistant" && !msg.content && !msg.reasoning && msg.isStreaming && (
+                      <div className="flex items-center gap-2 text-zinc-400 text-xs py-1">
+                        <Loader2 className="w-3.5 h-3.5 text-orange-500 animate-spin" />
+                        <span className="animate-pulse">Retrieving repository context & reasoning...</span>
+                      </div>
+                    )}
+
                     {/* Message Body with Markdown */}
-                    <div className="prose prose-invert prose-xs sm:prose-sm max-w-none">
-                      <ReactMarkdown
-                        components={{
-                          code({ node, inline, className, children, ...props }) {
-                            const codeStr = String(children).replace(/\n$/, "");
-                            if (inline) {
-                              return (
-                                <code
-                                  className="bg-[#242430] text-orange-300 px-1 py-0.5 rounded text-[11px] font-mono"
-                                  {...props}
-                                >
-                                  {children}
-                                </code>
-                              );
-                            }
-                            return (
-                              <div className="relative my-2 rounded-lg bg-[#0d0d10] border border-[#22222a] overflow-hidden">
-                                <div className="flex items-center justify-between px-3 py-1.5 bg-[#14141a] border-b border-[#22222a] text-[10px] text-zinc-400">
-                                  <span>code</span>
-                                  <button
-                                    onClick={() => handleCopy(codeStr, `${idx}-${codeStr.slice(0, 5)}`)}
-                                    className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
+                    {msg.content && (
+                      <div className="prose prose-invert prose-xs sm:prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            code({ node, inline, className, children, ...props }) {
+                              const codeStr = String(children).replace(/\n$/, "");
+                              if (inline) {
+                                return (
+                                  <code
+                                    className="bg-[#242430] text-orange-300 px-1 py-0.5 rounded text-[11px] font-mono"
+                                    {...props}
                                   >
-                                    {copiedIndex === `${idx}-${codeStr.slice(0, 5)}` ? (
-                                      <>
-                                        <Check className="w-3 h-3 text-emerald-400" />
-                                        <span>Copied</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="w-3 h-3" />
-                                        <span>Copy</span>
-                                      </>
-                                    )}
-                                  </button>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                              return (
+                                <div className="relative my-2 rounded-lg bg-[#0d0d10] border border-[#22222a] overflow-hidden">
+                                  <div className="flex items-center justify-between px-3 py-1.5 bg-[#14141a] border-b border-[#22222a] text-[10px] text-zinc-400">
+                                    <span>code</span>
+                                    <button
+                                      onClick={() => handleCopy(codeStr, `${idx}-${codeStr.slice(0, 5)}`)}
+                                      className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
+                                    >
+                                      {copiedIndex === `${idx}-${codeStr.slice(0, 5)}` ? (
+                                        <>
+                                          <Check className="w-3 h-3 text-emerald-400" />
+                                          <span>Copied</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-3 h-3" />
+                                          <span>Copy</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  <pre className="p-3 text-[11px] font-mono overflow-x-auto text-zinc-300">
+                                    {children}
+                                  </pre>
                                 </div>
-                                <pre className="p-3 text-[11px] font-mono overflow-x-auto text-zinc-300">
-                                  {children}
-                                </pre>
-                              </div>
-                            );
-                          },
-                        }}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
+                              );
+                            },
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                        {msg.isStreaming && (
+                          <span className="inline-block w-1.5 h-3.5 bg-orange-500 ml-1 animate-pulse align-middle" />
+                        )}
+                      </div>
+                    )}
 
                     {/* Citations / Retrieved Sources Section */}
                     {msg.citations && msg.citations.length > 0 && (
@@ -544,8 +693,8 @@ export default function App() {
                 </div>
               ))}
 
-              {/* Loading Indicator */}
-              {isLoading && (
+              {/* Loading Indicator fallback if message placeholder not yet appended */}
+              {isLoading && messages[messages.length - 1]?.role === "user" && (
                 <div className="flex items-center gap-3 text-zinc-400 text-xs py-2">
                   <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0 p-0.5 animate-pulse">
                     <img src="/logo.png" alt="Gito" className="w-full h-full object-contain" />

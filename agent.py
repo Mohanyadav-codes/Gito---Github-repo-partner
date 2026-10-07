@@ -101,13 +101,13 @@ class GitoAgent:
                 self.client = Groq(api_key=groq_key)
                 self.provider = "groq"
 
-                preferred = self.model or os.getenv("GITO_MODEL", "qwen/qwen3.8-27b")
+                preferred = self.model or os.getenv("GITO_MODEL", "openai/gpt-oss-120b")
                 try:
                     available = [m.id for m in self.client.models.list().data if not m.id.startswith("whisper")]
                     if preferred in available:
                         self.model = preferred
                     else:
-                        fallbacks = [m for m in available if "qwen" in m or "gpt-oss" in m or "llama" in m]
+                        fallbacks = [m for m in available if "gpt-oss-120b" in m or "qwen" in m or "gpt" in m]
                         self.model = fallbacks[0] if fallbacks else available[0]
                         print(f"[Gito] Model '{preferred}' not available on this Groq cluster. Auto-selected '{self.model}'.")
                 except Exception:
@@ -255,6 +255,121 @@ class GitoAgent:
             return err_msg
 
         return full_response
+
+    def answer_stream(
+        self,
+        query: str,
+        top_k: int = 5,
+        score_threshold: Optional[float] = None,
+        chunk_type: Optional[str] = None,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Yields streaming chunks for web/SSE clients:
+        - {"type": "citations", "citations": [...]}
+        - {"type": "token", "content": "..."}
+        - {"type": "done"}
+        """
+        clean_query = query.strip()
+        if not clean_query:
+            yield {"type": "token", "content": "Please provide a valid question."}
+            yield {"type": "done"}
+            return
+
+        # 1. Retrieve relevant chunks
+        hits = self.retriever.retrieve(
+            query=clean_query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            chunk_type=chunk_type,
+        )
+
+        citations = [
+            {
+                "filepath": hit.get("filepath", ""),
+                "name": hit.get("name", ""),
+                "chunk_type": hit.get("chunk_type", ""),
+                "score": round(hit.get("score", 0.0), 4),
+                "content": hit.get("content", ""),
+                "language": hit.get("language"),
+            }
+            for hit in hits
+        ]
+
+        yield {"type": "citations", "citations": citations}
+
+        if not hits:
+            yield {"type": "token", "content": "No relevant context found in the repository for this query."}
+            yield {"type": "done"}
+            return
+
+        formatted_context = self.retriever.format_context(hits)
+        user_prompt = USER_PROMPT_TEMPLATE.format(
+            context=formatted_context,
+            query=clean_query,
+        )
+
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        if self.client is None:
+            yield {
+                "type": "token",
+                "content": (
+                    "[Gito Context Preview - No LLM API key provided]\n\n"
+                    f"Retrieved {len(hits)} relevant snippet(s):\n\n"
+                    f"{formatted_context}\n\n"
+                    "To get live AI answers, set GROQ_API_KEY in your .env file."
+                ),
+            }
+            yield {"type": "done"}
+            return
+
+        try:
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.2,
+                stream=True,
+            )
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta:
+                    delta = chunk.choices[0].delta
+                    reasoning = getattr(delta, "reasoning", None)
+                    if reasoning:
+                        yield {"type": "reasoning", "content": reasoning}
+                    content = delta.content
+                    if content:
+                        yield {"type": "token", "content": content}
+        except Exception as e:
+            # Auto-recovery fallback if model error
+            if self.provider == "groq":
+                try:
+                    available = [m.id for m in self.client.models.list().data if not m.id.startswith("whisper")]
+                    fallback_model = next((m for m in available if m != self.model and ("qwen" in m or "gpt" in m)), available[0])
+                    self.model = fallback_model
+                    stream = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=0.2,
+                        stream=True,
+                    )
+                    for chunk in stream:
+                        if chunk.choices and chunk.choices[0].delta:
+                            delta = chunk.choices[0].delta
+                            reasoning = getattr(delta, "reasoning", None)
+                            if reasoning:
+                                yield {"type": "reasoning", "content": reasoning}
+                            content = delta.content
+                            if content:
+                                yield {"type": "token", "content": content}
+                except Exception as retry_err:
+                    yield {"type": "token", "content": f"\n\n[Gito Error] {retry_err}"}
+            else:
+                yield {"type": "token", "content": f"\n\n[Gito Error] {e}"}
+
+        yield {"type": "done"}
 
     def close(self):
         """Close vector store resources."""

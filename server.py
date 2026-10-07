@@ -11,7 +11,9 @@ Provides REST endpoints for:
 import os
 import sys
 from typing import Optional, List, Dict, Any
+import json
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -202,6 +204,56 @@ def chat_with_repo(req: ChatRequest):
         "citations": citations,
         "collection": collection,
     }
+
+
+@app.post("/api/chat/stream")
+def chat_stream(req: ChatRequest):
+    """
+    Stream query answer tokens in real-time via Server-Sent Events (SSE).
+    """
+    collection = req.collection.strip()
+    message = req.message.strip()
+
+    if not collection:
+        raise HTTPException(status_code=400, detail="Collection name required.")
+    if not message:
+        raise HTTPException(status_code=400, detail="Query message required.")
+
+    def event_generator():
+        embedder = get_embedder()
+        vector_store = QdrantVectorStore(collection_name=collection, path=DEFAULT_STORAGE_PATH)
+        retriever = Retriever(
+            collection_name=collection,
+            db_path=DEFAULT_STORAGE_PATH,
+            embedder=embedder,
+            vector_store=vector_store,
+        )
+        agent = GitoAgent(
+            collection_name=collection,
+            db_path=DEFAULT_STORAGE_PATH,
+            retriever=retriever,
+        )
+
+        try:
+            for event in agent.answer_stream(
+                query=message,
+                top_k=req.top_k,
+                chunk_type=req.type,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            agent.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 
 # Mount React static files if built

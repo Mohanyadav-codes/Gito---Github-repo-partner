@@ -100,7 +100,7 @@ class GitoAgent:
                 from groq import Groq
                 self.client = Groq(api_key=groq_key)
                 self.provider = "groq"
-                self.model = self.model or os.getenv("GITO_MODEL", "llama-3.3-70b-versatile")
+                self.model = self.model or os.getenv("GITO_MODEL", "qwen/qwen3.8-27b")
                 print(f"[Gito] Connected to Groq (model: {self.model})")
                 return
             except Exception as e:

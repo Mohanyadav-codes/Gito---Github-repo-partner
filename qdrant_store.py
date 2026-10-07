@@ -199,6 +199,49 @@ class QdrantVectorStore:
         res = self.client.count(collection_name=self.collection_name)
         return res.count
 
+    @classmethod
+    def sanitize_collection_name(cls, name: str) -> str:
+        """Sanitize a string to be a valid Qdrant collection name."""
+        import re
+        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', name).strip('_')
+        return sanitized.lower() or "repo_default"
+
+    @classmethod
+    def list_collections(
+        cls,
+        path: Optional[str] = None,
+        url: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        List all collections with their point counts.
+        """
+        qdrant_url = url or os.getenv("QDRANT_URL")
+        qdrant_api_key = api_key or os.getenv("QDRANT_API_KEY")
+
+        if qdrant_url:
+            temp_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+        else:
+            storage_path = path or os.getenv("QDRANT_PATH", DEFAULT_STORAGE_PATH)
+            os.makedirs(storage_path, exist_ok=True)
+            temp_client = QdrantClient(path=storage_path)
+
+        try:
+            cols = temp_client.get_collections().collections
+            info_list = []
+            for c in cols:
+                try:
+                    count = temp_client.count(c.name).count
+                except Exception:
+                    count = 0
+                info_list.append({"name": c.name, "count": count})
+            return info_list
+        finally:
+            try:
+                temp_client.close()
+            except Exception:
+                pass
+
     def close(self):
         """Close the Qdrant client connection cleanly."""
         if hasattr(self, "client") and self.client is not None:
@@ -212,3 +255,4 @@ class QdrantVectorStore:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+

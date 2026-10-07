@@ -92,7 +92,7 @@ def extract_repo(url: str, output_dir: str, token: str = None):
     resp = requests.get(repo_url, headers=headers)
     if resp.status_code != 200:
         print(f"Failed to fetch repo details: {resp.status_code} {resp.text}")
-        return
+        return 0
         
     default_branch = resp.json().get('default_branch', 'main')
     
@@ -103,7 +103,7 @@ def extract_repo(url: str, output_dir: str, token: str = None):
     resp = requests.get(tree_url, headers=headers)
     if resp.status_code != 200:
         print(f"Failed to fetch file tree: {resp.status_code} {resp.text}")
-        return
+        return 0
         
     tree = resp.json().get('tree', [])
     
@@ -146,6 +146,7 @@ def extract_repo(url: str, output_dir: str, token: str = None):
     print(f"\nExtraction complete!")
     print(f"Downloaded {downloaded_count} files to '{output_dir}'.")
     print(f"Skipped {skipped_count} excluded files.")
+    return downloaded_count
 
 if __name__ == "__main__":
     import argparse

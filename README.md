@@ -9,7 +9,24 @@ Gito is an agent designed to extract repositories from links, build a hybrid RAG
 pip install -r requirements.txt
 ```
 
-## Pipeline Steps
+## Quickstart: Unified CLI
+
+Launch Gito's interactive terminal. It prompts you to select an existing indexed project or paste a new GitHub repo link, indexes it automatically, and drops you into a direct conversational chat:
+
+```bash
+python main.py
+```
+
+You can also pass arguments directly:
+```bash
+# Add/index a new repo and start chatting immediately:
+python main.py --repo https://github.com/owner/repo
+
+# Query an existing collection in one shot:
+python main.py --collection gito_codebase --query "How does the auth flow work?"
+```
+
+## Individual Pipeline Steps
 
 ### 1. Extract Repository
 Extract code, docs, and README from GitHub API while filtering out git history, node_modules, build directories, binaries, and secrets:

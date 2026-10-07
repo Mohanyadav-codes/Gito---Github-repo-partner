@@ -12,6 +12,7 @@ venv/
 repo_output/
 test_repo/
 test_output/
+repo_cache/
 
 # Vector database storage
 qdrant_db/

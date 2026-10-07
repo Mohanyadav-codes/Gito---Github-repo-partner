@@ -37,3 +37,17 @@ python embedder.py repo_output/ --collection gito_codebase --db-path ./qdrant_db
 - **Embedded / Local Storage**: Stored on disk in `./qdrant_db` (no Docker or external server setup required).
 - **Remote / Cloud Support**: Supports Qdrant Cloud or Docker container by specifying `QDRANT_URL` and `QDRANT_API_KEY`.
 - **Payload storage**: Stores code/doc content, file paths, chunk names, and types directly inside each vector point for instant retrieval.
+
+### 4. Query Retrieval
+Embeds the user's question using BGE query prefixing and performs cosine similarity search against Qdrant to retrieve relevant code and doc chunks:
+
+```bash
+# One-shot query
+python retriever.py "how is attendance marked or recorded?" --top-k 3
+
+# Filter by type (code or doc)
+python retriever.py "installation steps" --top-k 3 --type doc
+
+# Interactive query mode
+python retriever.py -i
+```
